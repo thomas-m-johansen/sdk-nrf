@@ -248,6 +248,70 @@ static bool process_step_data(struct bt_le_cs_subevent_step *local_step,
 		}
 
 		context->mode_1_data_index++;
+	} else if (local_step->mode == BT_HCI_OP_LE_CS_MAIN_MODE_3) {
+
+		struct bt_hci_le_cs_step_data_mode_3 *local_step_data =
+			(struct bt_hci_le_cs_step_data_mode_3 *)local_step->data;
+		struct bt_hci_le_cs_step_data_mode_3 *peer_step_data =
+			(struct bt_hci_le_cs_step_data_mode_3 *)peer_step->data;
+
+		for (uint8_t i = 0; i < (context->n_ap + 1); i++) {
+			if (local_step_data->tone_info[i].extension_indicator !=
+				    BT_HCI_LE_CS_NOT_TONE_EXT_SLOT ||
+			    peer_step_data->tone_info[i].extension_indicator !=
+				    BT_HCI_LE_CS_NOT_TONE_EXT_SLOT) {
+				continue;
+			}
+
+			mode_2_data[context->mode_2_data_index].channel = local_step->channel;
+			mode_2_data[context->mode_2_data_index].antenna_permutation =
+				local_step_data->antenna_permutation_index;
+			mode_2_data[context->mode_2_data_index].local_iq_sample =
+				bt_le_cs_parse_pct(
+					local_step_data->tone_info[i].phase_correction_term);
+			mode_2_data[context->mode_2_data_index].peer_iq_sample = bt_le_cs_parse_pct(
+				peer_step_data->tone_info[i].phase_correction_term);
+
+			if (local_step_data->tone_info[i].quality_indicator ==
+				    BT_HCI_LE_CS_TONE_QUALITY_LOW ||
+			    local_step_data->tone_info[i].quality_indicator ==
+				    BT_HCI_LE_CS_TONE_QUALITY_UNAVAILABLE ||
+			    peer_step_data->tone_info[i].quality_indicator ==
+				    BT_HCI_LE_CS_TONE_QUALITY_LOW ||
+			    peer_step_data->tone_info[i].quality_indicator ==
+				    BT_HCI_LE_CS_TONE_QUALITY_UNAVAILABLE) {
+				mode_2_data[context->mode_2_data_index].failed = true;
+			}
+
+			context->mode_2_data_index++;
+		}
+
+		if (local_step_data->packet_quality_aa_check !=
+			    BT_HCI_LE_CS_PACKET_QUALITY_AA_CHECK_SUCCESSFUL ||
+		    local_step_data->packet_rssi == BT_HCI_LE_CS_PACKET_RSSI_NOT_AVAILABLE ||
+		    local_step_data->tod_toa_reflector ==
+			    BT_HCI_LE_CS_TIME_DIFFERENCE_NOT_AVAILABLE ||
+		    peer_step_data->packet_quality_aa_check !=
+			    BT_HCI_LE_CS_PACKET_QUALITY_AA_CHECK_SUCCESSFUL ||
+		    peer_step_data->packet_rssi == BT_HCI_LE_CS_PACKET_RSSI_NOT_AVAILABLE ||
+		    peer_step_data->tod_toa_reflector ==
+			    BT_HCI_LE_CS_TIME_DIFFERENCE_NOT_AVAILABLE) {
+			mode_1_data[context->mode_1_data_index].failed = true;
+		}
+
+		if (context->role == BT_CONN_LE_CS_ROLE_INITIATOR) {
+			mode_1_data[context->mode_1_data_index].toa_tod_initiator =
+				local_step_data->toa_tod_initiator;
+			mode_1_data[context->mode_1_data_index].tod_toa_reflector =
+				peer_step_data->tod_toa_reflector;
+		} else if (context->role == BT_CONN_LE_CS_ROLE_REFLECTOR) {
+			mode_1_data[context->mode_1_data_index].tod_toa_reflector =
+				local_step_data->tod_toa_reflector;
+			mode_1_data[context->mode_1_data_index].toa_tod_initiator =
+				peer_step_data->toa_tod_initiator;
+		}
+
+		context->mode_1_data_index++;
 	}
 
 	return true;
